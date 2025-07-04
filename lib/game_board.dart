@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+// import 'package:flutter/widgets.dart';
 import 'package:flutter_application_2/components/piece.dart';
 import 'package:flutter_application_2/components/square.dart';
+import 'package:flutter_application_2/components/taken_pieces.dart';
 import 'package:flutter_application_2/util/on_board.dart';
 
 class GameBoard extends StatefulWidget {
@@ -11,8 +13,11 @@ class GameBoard extends StatefulWidget {
 }
 
 class _GameBoardState extends State<GameBoard> {
+  // 2-dimentional list representing the chess board
   late List<List<ChessPiece?>> board;
 
+  // the current selected piece 
+  // if no piece is selected, this is null
   ChessPiece? selectedPiece;
 
   // the row and col of the selected piece
@@ -23,6 +28,22 @@ class _GameBoardState extends State<GameBoard> {
   // A list of valid moves for the current selected piece
   // each move is represented with 2 elements: row and col
   List<List<int>> validMoves = [];
+
+  // list of white pieces that black have captured
+  List<ChessPiece> whitePieceTaken = [];
+
+  // list of black pieces that black have captured 
+  List<ChessPiece> blackPiecetaken = [];
+
+  // a bool value to indicate whose turn is it
+  bool isWhiteTurn = true;
+
+  // keeping track of the initial kings position to make it easier to see if the king is in checkmated
+  List<int> whiteKingPosition = [7, 4]; 
+  List<int> blackKingPosition = [0, 4];
+  
+  // checkmate status
+  bool checkStatus = false;
 
   @override
   void initState() {
@@ -158,9 +179,11 @@ void pieceSelected(int row, int col) {
 
     // no piece has been selected yet, this is the first selection
     if( selectedPiece == null && board[row][col] != null) {
-      selectedPiece = board[row][col];
-      selectedRow = row;
-      selectedCol = col;
+      if (board[row][col]!.isWhite == isWhiteTurn) { // white to begin 
+        selectedPiece = board[row][col];
+        selectedRow = row;
+        selectedCol = col;
+      }
     }
 
     // there is a piece already selected, but user can select another one of their pieces
@@ -213,6 +236,12 @@ void pieceSelected(int row, int col) {
           board[row + direction][col -1] != null && // and if their is a piece ther that is no null
           board[row + direction][col -1]!.isWhite !=piece.isWhite) { // and white this is a valid moves
             candidateMoves.add([row + direction, col -1]);
+          }
+          // for white
+        if(isInBoard(row + direction, col + 1) && // check if on board
+          board[row + direction][col + 1] != null && // and if their is a piece ther that is no null
+          board[row + direction][col + 1]!.isWhite !=piece.isWhite) { // and white this is a valid moves
+            candidateMoves.add([row + direction, col + 1]);
           }
         
         break;
@@ -378,9 +407,29 @@ void pieceSelected(int row, int col) {
 
   // MOVE PIECE
   void movePiece(int newRow, int newCol){
+
+    // quick check here, if the new spot has an enemy piece
+
+    if (board[newRow][newCol] != null ){ // if that new position we are trying to go to is an enemy piece
+      // add the captured piece to the list
+      var capturedPiece = board[newRow][newCol];
+      if (capturedPiece!.isWhite){
+        whitePieceTaken.add(capturedPiece);
+      } else {
+        blackPiecetaken.add(capturedPiece);
+      }
+    }
+
     // move the piece and clear the old
     board[newRow][newCol] = selectedPiece;
     board[selectedRow][selectedCol] = null;
+
+    // see if the king is checkmate
+    if (isKingCheckmated(!isWhiteTurn)){
+      checkStatus = true;
+    } else {
+      checkStatus = false;
+    }
 
     // clear selection
     setState(() {
@@ -389,42 +438,102 @@ void pieceSelected(int row, int col) {
       selectedCol = -1;
       validMoves = [];
     });
+
+    // change turns
+    isWhiteTurn = !isWhiteTurn;
+  }
+
+  // is king checkmated?
+  bool isKingCheckmated(bool isWhiteKing){
+    // get the position of the king
+    List<int> kingPosition = 
+      isWhiteKing ? whiteKingPosition : blackKingPosition;
+
+    // check if any enemy piece can attack the king
+    for(int i=0; i<8; i++){
+      for(int j=0; j<8; j++){
+        // skip empty squares and piece of the same color as the king
+        if (board[i][j] == null || board[i][j]!.isWhite == isWhiteKing){
+          continue;
+        }
+
+        List<List<int>> pieceValidMoves =
+            calculateRawValidMoves(i, j, board[i][j]);
+
+        // check if the king's position is in this piece's valid moves
+        if (pieceValidMoves.any((move) => 
+            move[0] == kingPosition[0] && move[1] == kingPosition[1])) {
+              return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GridView.builder(
-          itemCount: 8 * 8,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 8),
-          itemBuilder: (context, index) {
-            int row = index ~/ 8;
-            int col = index % 8;
+      backgroundColor: const Color.fromARGB(255, 64, 88, 44),
+      body: Column(
+        children: [
+          // white piece captured
+          Expanded(
+            child: GridView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: whitePieceTaken.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 8), 
+              itemBuilder: (context, index) => TakenPieces(whitePieceTaken[index].imgPath, true)
+              ),
+          ),
 
-            bool isWhite = (row + col) % 2 == 0;
+          Text(checkStatus ? 'Checkmate' :''),
+          Expanded(
+            flex: 3,
+            child: GridView.builder(
+                itemCount: 8 * 8,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 8),
+                itemBuilder: (context, index) {
+                  int row = index ~/ 8;
+                  int col = index % 8;
+            
+                  bool isWhite = (row + col) % 2 == 0;
+            
+                  // check if this square is selected
+                  bool isSelected = selectedRow == row && selectedCol == col;
+            
+                  // check if this square is a valid move
+                  bool isvalidMove = false;
+                  for (var position in validMoves){
+                    // compare row and col
+                    if (position[0] == row && position[1] == col){
+                      isvalidMove= true;
+                    }
+                  }
+            
+                  return Square(
+                    isWhite, 
+                    board[row][col],
+                    isSelected,
+                    (() => pieceSelected(row, col)),
+                    isvalidMove
+                    );
+                }),
+          ),
 
-            // check if this square is selected
-            bool isSelected = selectedRow == row && selectedCol == col;
-
-            // check if this square is a valid move
-            bool isvalidMove = false;
-            for (var position in validMoves){
-              // compare row and col
-              if (position[0] == row && position[1] == col){
-                isvalidMove= true;
-              }
-            }
-
-            return Square(
-              isWhite, 
-              board[row][col],
-              isSelected,
-              (() => pieceSelected(row, col)),
-              isvalidMove
-              );
-          }),
+          // black piece taken
+          Expanded(
+            child: GridView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: blackPiecetaken.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 8), 
+              itemBuilder: (context, index) => TakenPieces(blackPiecetaken[index].imgPath, false)
+              ),
+          ),
+        ],
+      ),
     );
   }
 }
