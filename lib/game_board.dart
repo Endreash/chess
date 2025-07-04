@@ -150,7 +150,21 @@ class _GameBoardState extends State<GameBoard> {
 void pieceSelected(int row, int col) {
   setState(() {
     // select a piece if there is a piece in that position
-    if(board[row][col] != null) {
+    // if(board[row][col] != null) {
+    //   selectedPiece = board[row][col];
+    //   selectedRow = row;
+    //   selectedCol = col;
+    // }
+
+    // no piece has been selected yet, this is the first selection
+    if( selectedPiece == null && board[row][col] != null) {
+      selectedPiece = board[row][col];
+      selectedRow = row;
+      selectedCol = col;
+    }
+
+    // there is a piece already selected, but user can select another one of their pieces
+    else if (board[row][col] != null && board[row][col]!.isWhite == selectedPiece!.isWhite) {
       selectedPiece = board[row][col];
       selectedRow = row;
       selectedCol = col;
@@ -167,7 +181,7 @@ void pieceSelected(int row, int col) {
 }
 
   // CALCULATE RAW VALID MOVES
-  calculateRawValidMoves(int row, int col, ChessPiece? piece){
+  List<List<int>> calculateRawValidMoves(int row, int col, ChessPiece? piece){
     List<List<int>> candidateMoves = [];
 
     if (piece == null){
@@ -197,7 +211,7 @@ void pieceSelected(int row, int col) {
         // pawns can kill diagnally
         if(isInBoard(row + direction, col -1) && // check if on board
           board[row + direction][col -1] != null && // and if their is a piece ther that is no null
-          board[row + direction][col -1]!.isWhite) { // and white this is a valid moves
+          board[row + direction][col -1]!.isWhite !=piece.isWhite) { // and white this is a valid moves
             candidateMoves.add([row + direction, col -1]);
           }
         
@@ -356,6 +370,7 @@ void pieceSelected(int row, int col) {
     }
 
     return candidateMoves;
+    // return candidateMoves.cast<List<int>>;
   }
 
   // ChessPieces myPawn = ChessPieces(
